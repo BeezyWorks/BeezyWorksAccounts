@@ -10,8 +10,7 @@
 		{
 			"binding": "DB",
 			"database_name": "beezyworks-accounts",
-			// Placeholder: replace with the id printed by `wrangler d1 create beezyworks-accounts`.
-			"database_id": "00000000-0000-0000-0000-000000000000",
+			"database_id": "454af5b4-6a1e-4830-9014-fcde9b8b4c86",
 			"migrations_dir": "migrations"
 		}
 	],
