@@ -1,0 +1,18 @@
+# Copy to .dev.vars for local `wrangler dev` (never commit .dev.vars).
+# Secrets
+BETTER_AUTH_SECRET=replace-with-openssl-rand-base64-32
+RESEND_API_KEY=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+APPLE_TEAM_ID=
+APPLE_KEY_ID=
+# Contents of the .p8 file; newlines may be written as \n
+APPLE_PRIVATE_KEY=
+
+# Vars (defaults live in wrangler.jsonc; override locally here)
+BETTER_AUTH_URL=http://localhost:8787
+EMAIL_FROM=Baderech <noreply@baderech.app>
+TRUSTED_ORIGINS=mishna://,http://localhost:8081
+COOKIE_DOMAIN=
+APPLE_SERVICES_ID=
+APPLE_APP_BUNDLE_IDS=

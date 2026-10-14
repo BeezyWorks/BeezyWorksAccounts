@@ -1,0 +1,28 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "beezyworks-accounts",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-08-22",
+	"compatibility_flags": ["nodejs_compat"],
+	// Served at auth.baderech.app (the zone baderech.app must be on Cloudflare).
+	"routes": [{ "pattern": "auth.baderech.app", "custom_domain": true }],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "beezyworks-accounts",
+			// Placeholder: replace with the id printed by `wrangler d1 create beezyworks-accounts`.
+			"database_id": "00000000-0000-0000-0000-000000000000",
+			"migrations_dir": "migrations"
+		}
+	],
+	// Non-secret config. Secrets (BETTER_AUTH_SECRET, RESEND_API_KEY, GOOGLE_*,
+	// APPLE_TEAM_ID/KEY_ID/PRIVATE_KEY) are set with `wrangler secret put`.
+	"vars": {
+		"BETTER_AUTH_URL": "https://auth.baderech.app",
+		"EMAIL_FROM": "Baderech <noreply@baderech.app>",
+		"TRUSTED_ORIGINS": "mishna://,https://mishna.baderech.app",
+		"COOKIE_DOMAIN": "baderech.app",
+		"APPLE_SERVICES_ID": "",
+		"APPLE_APP_BUNDLE_IDS": ""
+	}
+}
