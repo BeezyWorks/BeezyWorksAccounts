@@ -20,7 +20,7 @@
 	"vars": {
 		"BETTER_AUTH_URL": "https://auth.baderech.app",
 		"EMAIL_FROM": "Baderech <noreply@baderech.app>",
-		"TRUSTED_ORIGINS": "mishna://,https://mishna.baderech.app",
+		"TRUSTED_ORIGINS": "mishnaapp://,https://mishna.baderech.app",
 		"COOKIE_DOMAIN": "baderech.app",
 		"APPLE_SERVICES_ID": "",
 		"APPLE_APP_BUNDLE_IDS": ""

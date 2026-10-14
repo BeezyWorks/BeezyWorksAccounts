@@ -15,7 +15,7 @@ export interface Env {
   // Vars
   BETTER_AUTH_URL: string
   EMAIL_FROM?: string
-  /** Comma-separated origins / app schemes, e.g. `mishna://,https://mishna.baderech.app`. */
+  /** Comma-separated origins / app schemes, e.g. `mishnaapp://,https://mishna.baderech.app`. */
   TRUSTED_ORIGINS?: string
   /** Parent domain for cross-subdomain cookies, e.g. `baderech.app`. */
   COOKIE_DOMAIN?: string

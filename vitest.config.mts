@@ -15,7 +15,7 @@ export default defineConfig(async () => {
             TEST_MIGRATIONS: migrations,
             BETTER_AUTH_SECRET: 'test-secret-test-secret-test-secret-0123',
             BETTER_AUTH_URL: 'https://auth.test',
-            TRUSTED_ORIGINS: 'mishna://,https://mishna.test',
+            TRUSTED_ORIGINS: 'mishnaapp://,https://mishna.test',
           },
         },
       }),

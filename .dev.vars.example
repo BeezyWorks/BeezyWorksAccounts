@@ -12,7 +12,7 @@ APPLE_PRIVATE_KEY=
 # Vars (defaults live in wrangler.jsonc; override locally here)
 BETTER_AUTH_URL=http://localhost:8787
 EMAIL_FROM=Baderech <noreply@baderech.app>
-TRUSTED_ORIGINS=mishna://,http://localhost:8081
+TRUSTED_ORIGINS=mishnaapp://,http://localhost:8081
 COOKIE_DOMAIN=
 APPLE_SERVICES_ID=
 APPLE_APP_BUNDLE_IDS=

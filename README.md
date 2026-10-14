@@ -43,7 +43,7 @@ Defaults for vars live in `wrangler.jsonc`; secrets are set with `wrangler secre
 | `BETTER_AUTH_URL` | var | Public base URL, `https://auth.baderech.app`. |
 | `RESEND_API_KEY` | secret | Resend API key. If unset, emails are logged (to, subject, link) instead of sent. |
 | `EMAIL_FROM` | var | From address, default `Baderech <noreply@baderech.app>`. |
-| `TRUSTED_ORIGINS` | var | Comma-separated origins/schemes, e.g. `mishna://,https://mishna.baderech.app`. |
+| `TRUSTED_ORIGINS` | var | Comma-separated origins/schemes, e.g. `mishnaapp://,https://mishna.baderech.app`. |
 | `COOKIE_DOMAIN` | var | Parent domain for cross-subdomain cookies, e.g. `baderech.app`. Empty = off. |
 | `GOOGLE_CLIENT_ID` | secret | Google OAuth client id (Google enabled only with both). |
 | `GOOGLE_CLIENT_SECRET` | secret | Google OAuth client secret. |

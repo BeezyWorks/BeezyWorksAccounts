@@ -25,7 +25,7 @@ Do the steps in this order, because later steps need values from earlier ones:
 | `BETTER_AUTH_URL` = `https://auth.baderech.app` | var | fixed | `wrangler.jsonc` `vars` |
 | `EMAIL_FROM` = `Baderech <noreply@baderech.app>` | var | fixed | `wrangler.jsonc` `vars` |
 | `COOKIE_DOMAIN` = `baderech.app` | var | fixed | `wrangler.jsonc` `vars` |
-| `TRUSTED_ORIGINS` e.g. `mishna://,https://mishna.baderech.app` | var | each app's URL scheme + web origin | `wrangler.jsonc` `vars` |
+| `TRUSTED_ORIGINS` e.g. `mishnaapp://,https://mishna.baderech.app` | var | each app's URL scheme + web origin | `wrangler.jsonc` `vars` |
 | `APPLE_SERVICES_ID` e.g. `app.baderech.auth` | var | Apple Identifiers -> Services ID | `wrangler.jsonc` `vars` |
 | `APPLE_APP_BUNDLE_IDS` (comma-separated) | var | each app's iOS bundle ID | `wrangler.jsonc` `vars` |
 | `BETTER_AUTH_SECRET` | secret | `openssl rand -base64 32` | `wrangler secret put` |
@@ -178,7 +178,7 @@ Apple can POST events (email-disabled, consent-revoked, account-delete) to an en
 
 ## 6. Adding a new app later
 
-1. Append the app's URL scheme and web origin to `TRUSTED_ORIGINS` (e.g. `mishna://,https://mishna.baderech.app,siddur://,https://siddur.baderech.app`).
+1. Append the app's URL scheme and web origin to `TRUSTED_ORIGINS` (e.g. `mishnaapp://,https://mishna.baderech.app,siddur://,https://siddur.baderech.app`).
 2. Append its iOS bundle ID to `APPLE_APP_BUNDLE_IDS`.
 3. Apple: enable Sign in with Apple on the new App ID and **group it with the primary App ID** (5a). Set `ios.usesAppleSignIn: true` in the app and rebuild.
 4. Edit `wrangler.jsonc` vars and `pnpm exec wrangler deploy`.
@@ -199,4 +199,3 @@ Apple can POST events (email-disabled, consent-revoked, account-delete) to an en
 - Exact current menu labels on Apple's portal for grouping App IDs and Email Communication (taken from third-party guides and memory; Apple's docs confirm the registration requirement and SPF/DKIM authentication).
 - Resend "Sending access" key wording and the existence of domain scoping in the create-key dialog (docs confirm permission + optional domain restriction exist).
 - Resend's current auto-configure is described as Domain Connect "Sign in to Cloudflare"; the exact button label may vary.
-- The repo's `/health` route and D1 binding names - verify against the code the other agent writes.

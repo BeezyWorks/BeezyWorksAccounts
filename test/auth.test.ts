@@ -137,7 +137,7 @@ describe('configuration', () => {
 
   it('applies trusted origins, cookie domain, rate limit, linking', async () => {
     const auth = await createAuth({ ...baseEnv, COOKIE_DOMAIN: 'baderech.app' })
-    expect(auth.options.trustedOrigins).toEqual(expect.arrayContaining(['mishna://', 'https://mishna.test']))
+    expect(auth.options.trustedOrigins).toEqual(expect.arrayContaining(['mishnaapp://', 'https://mishna.test']))
     expect(auth.options.advanced?.crossSubDomainCookies).toEqual({ enabled: true, domain: 'baderech.app' })
     expect(auth.options.rateLimit).toMatchObject({ enabled: true, storage: 'database' })
     expect(auth.options.account?.accountLinking?.trustedProviders).toEqual(['google', 'apple'])
