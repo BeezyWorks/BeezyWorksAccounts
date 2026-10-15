@@ -2,6 +2,7 @@ import { AUTH_BASE_PATH, createAuth } from './auth'
 import { DATA_BASE_PATH, handleData } from './data'
 import { CORS_METHODS, withCors, allowedOrigin } from './cors'
 import { handleHandoff } from './handoff'
+import { handleStart } from './start'
 import type { Env } from './env'
 import { resetPasswordPage, verifiedPage } from './pages'
 
@@ -28,6 +29,7 @@ export default {
       if (pathname === '/reset-password') return html(resetPasswordPage(url.searchParams.get('token')))
       if (pathname === '/verified') return html(verifiedPage())
       if (pathname === '/handoff') return handleHandoff(request, env)
+      if (pathname.startsWith('/start/')) return handleStart(request, env, pathname.slice('/start/'.length))
     }
     const isAuth = pathname === AUTH_BASE_PATH || pathname.startsWith(`${AUTH_BASE_PATH}/`)
     const isData = pathname === DATA_BASE_PATH || pathname.startsWith(`${DATA_BASE_PATH}/`)
