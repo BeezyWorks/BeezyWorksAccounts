@@ -1,7 +1,8 @@
-import { decodeJwt, decodeProtectedHeader, importPKCS8, jwtVerify } from 'jose'
+import { decodeJwt, decodeProtectedHeader, exportJWK, generateKeyPair, importPKCS8, jwtVerify, SignJWT } from 'jose'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getAppleClientSecret, getAppleConfig, resetAppleSecretCache, revokeAppleToken } from '../src/apple'
 import { createAuth } from '../src/auth'
+import worker from '../src/index'
 import { appleEnv, baseEnv, call, PASSWORD, verifiedSession } from './helpers'
 
 beforeEach(() => resetAppleSecretCache())
@@ -125,5 +126,85 @@ describe('apple revoke', () => {
     })
     const del = await call('POST', '/api/auth/delete-user', { password: PASSWORD }, { token, env: e })
     expect(del.status).toBe(200)
+  })
+})
+
+describe('native apple sign-in (id token)', () => {
+  const BUNDLE = 'app.baderech.siddur'
+  const sha256Hex = async (v: string) =>
+    [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v)))].map((b) => b.toString(16).padStart(2, '0')).join('')
+
+  /** Fake Apple: a local key whose public half is served at Apple's JWKS URL. */
+  async function fakeApple() {
+    const { publicKey, privateKey } = await generateKeyPair('ES256', { extractable: true })
+    const jwk = { ...(await exportJWK(publicKey)), kid: 'apple-test-kid', alg: 'ES256', use: 'sig' }
+    const real = globalThis.fetch
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (url === 'https://appleid.apple.com/auth/keys') return Response.json({ keys: [jwk] })
+      return real(input as any, init)
+    })
+    return (claims: Record<string, unknown> = {}, aud = BUNDLE) =>
+      new SignJWT({ email: `apple${Date.now()}${Math.random().toString(36).slice(2, 6)}@privaterelay.test`, email_verified: 'true', ...claims })
+        .setProtectedHeader({ alg: 'ES256', kid: 'apple-test-kid' })
+        .setIssuer('https://appleid.apple.com')
+        .setAudience(aud)
+        .setSubject(`apple-sub-${Math.random().toString(36).slice(2)}`)
+        .setIssuedAt()
+        .setExpirationTime('10m')
+        .sign(privateKey)
+  }
+
+  // What expo-apple-authentication clients send: no Origin header, no cookies.
+  const signIn = async (body: unknown, e?: Awaited<ReturnType<typeof appleEnv>>) =>
+    worker.fetch(
+      new Request('https://auth.test/api/auth/sign-in/social', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'cf-connecting-ip': `10.5.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}` },
+        body: JSON.stringify({ provider: 'apple', ...(body as object) }),
+      }),
+      e ?? (await appleEnv()),
+    )
+
+  it('accepts a bundle-id audience, stores the first-sign-in name, and returns set-auth-token', async () => {
+    const sign = await fakeApple()
+    const res = await signIn({ idToken: { token: await sign(), user: { name: { firstName: 'Dina', lastName: 'Levi' } } } })
+    expect(res.status).toBe(200)
+    const bearer = res.headers.get('set-auth-token')!
+    expect(bearer).toBeTruthy()
+    const body: any = await res.json()
+    expect(body.redirect).toBe(false)
+    expect(body.user).toMatchObject({ firstName: 'Dina', lastName: 'Levi', name: 'Dina Levi' })
+    const me = await call('GET', '/api/auth/get-session', undefined, { token: bearer })
+    expect(me.data.user.id).toBe(body.user.id)
+  })
+
+  it('rejects audiences that are not configured, and unsigned/forged tokens', async () => {
+    const sign = await fakeApple()
+    expect((await signIn({ idToken: { token: await sign({}, 'com.someone.else') } })).status).toBe(401)
+    const forged = await new SignJWT({ email: 'x@y.test' })
+      .setProtectedHeader({ alg: 'ES256', kid: 'apple-test-kid' })
+      .setIssuer('https://appleid.apple.com')
+      .setAudience(BUNDLE)
+      .setExpirationTime('10m')
+      .sign((await generateKeyPair('ES256')).privateKey)
+    expect((await signIn({ idToken: { token: forged } })).status).toBe(401)
+  })
+
+  it('nonce: optional; if sent it must equal the claim or be the claim\'s SHA-256 preimage', async () => {
+    const sign = await fakeApple()
+    const raw = 'raw-nonce-value-123'
+    // No nonce sent: not checked, even if the token has one.
+    expect((await signIn({ idToken: { token: await sign({ nonce: await sha256Hex(raw) }) } })).status).toBe(200)
+    // Usual pattern: Apple gets sha256(raw) hex in the token, the server gets raw.
+    expect((await signIn({ idToken: { token: await sign({ nonce: await sha256Hex(raw) }), nonce: raw } })).status).toBe(200)
+    // Same string in both places also passes.
+    expect((await signIn({ idToken: { token: await sign({ nonce: raw }), nonce: raw } })).status).toBe(200)
+    // Mismatch, or a nonce sent for a token that has none, fails.
+    expect((await signIn({ idToken: { token: await sign({ nonce: await sha256Hex(raw) }), nonce: 'other' } })).status).toBe(401)
+    expect((await signIn({ idToken: { token: await sign(), nonce: raw } })).status).toBe(401)
+    // The hash must be lowercase hex; base64 is not accepted.
+    const b64 = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw)))))
+    expect((await signIn({ idToken: { token: await sign({ nonce: b64 }), nonce: raw } })).status).toBe(401)
   })
 })

@@ -20,7 +20,7 @@ Provider console setup (Google, Apple, Resend, DNS) is in [`docs/SETUP.md`](docs
 | `GET /verified` | Landing page after email verification (default `callbackURL`). |
 | `GET /api/data/:namespace` | Auth required (bearer token or cookie). `200 { namespace, revision, updatedAt, data }`; nothing stored yet gives `{ namespace, revision: 0, updatedAt: null, data: null }`. |
 | `PUT /api/data/:namespace` | Auth required. Body `{ data, baseRevision? }` (`data` is any JSON value, `null` included; max 256 KB, else 413). If `baseRevision` is given and differs from the current revision (0 when nothing is stored) the response is `409` with the current record (same shape as GET); otherwise the value is stored with `revision = current + 1`, `updatedAt = Date.now()` (ms) and the new record is returned. Omit `baseRevision` to overwrite. The check and write are one SQL statement. |
-| `GET /handoff?return=<url>` | Web social sign-in handoff. `return` must be an http(s) URL whose origin is in `TRUSTED_ORIGINS` (else 400 plain text). With a cookie session, 302 to `<return>#ott=<one-time token>` (valid 3 minutes); with none, 302 to `<return>#error=no_session`. `no-store`, `no-referrer`. |
+| `GET /handoff?return=<url>` | Web social sign-in handoff. `return` must be an http(s) URL whose origin is in `TRUSTED_ORIGINS`, or a custom-scheme app URL whose `scheme://` is listed there (see Native apps); else 400 plain text. With a cookie session, 302 to `<return>#ott=<one-time token>` (valid 3 minutes); with none, 302 to `<return>#error=no_session`. `no-store`, `no-referrer`. |
 | `GET /health` | `{ "ok": true }` |
 
 Notes for clients:
@@ -34,6 +34,40 @@ Notes for clients:
   the response carries the bearer token in the `set-auth-token` header (body is `{ session, user }`);
   send it as `Authorization: Bearer <token>` to `/api/auth/*` and `/api/data/*`. Failures come back
   as `return#error=no_session`.
+- Native apps (iOS/Android, custom URL scheme such as `siddurone://`, which must be listed in
+  `TRUSTED_ORIGINS` as `siddurone://`). `return` on `/start/:provider` and `/handoff` may be
+  `siddurone://account/callback` (any path; no credentials; the scheme must be listed in the form
+  `scheme://`; `javascript:`, `data:`, `file:` and friends are always refused). Results go in the
+  **query**, not the fragment, because fragments are unreliable through deep links and expo-router:
+  - Google/Apple via the browser: open
+    `https://auth.baderech.app/start/google?return=siddurone%3A%2F%2Faccount%2Fcallback` (or `/start/apple`)
+    with `WebBrowser.openAuthSessionAsync(url, 'siddurone://account/callback')`. It ends at
+    `siddurone://account/callback?ott=<one-time token>` (single use, valid 3 minutes), or
+    `siddurone://account/callback?error=<code>` with `no_session`, `handoff_failed`, `start_failed`,
+    or a Better Auth provider code (e.g. `access_denied`, `state_not_found`), which Better Auth
+    appends to the `errorCallbackURL` that `/start` sets to the return URL.
+  - Then `POST https://auth.baderech.app/api/auth/one-time-token/verify` with JSON `{ "token": ott }`
+    (no Origin or cookies needed). The bearer is the `set-auth-token` response header; use it as
+    `Authorization: Bearer <token>`. Single use: a second verify is 400.
+  - Email verification: `POST /api/auth/sign-up/email` with `callbackURL:
+    "https://auth.baderech.app/handoff?return=siddurone%3A%2F%2Faccount%2Fcallback"`. No Origin
+    header is needed (the handoff URL is on the auth origin). The mail's link signs the user in and
+    redirects through `/handoff` to `siddurone://account/callback?ott=...`; if the link is opened
+    where there is no session cookie (e.g. the in-app browser's jar differs from the mail app's)
+    the result is `?error=no_session`.
+  - Native Apple sign-in (`expo-apple-authentication`), no browser: `POST /api/auth/sign-in/social`
+    with no Origin and no cookies, body
+    `{ "provider": "apple", "idToken": { "token": <identityToken>, "nonce": <raw nonce, optional>,
+    "user": { "name": { "firstName", "lastName" } } } }`. `user` comes from the credential's
+    `fullName` and is only available on the very first authorization; pass it then or the name is
+    lost. The token's `aud` must be in `APPLE_APP_BUNDLE_IDS` (or the services id), issuer
+    `https://appleid.apple.com`, age under 1 hour. Nonce: if `idToken.nonce` is sent it must equal
+    the token's `nonce` claim exactly, or the claim must equal the lowercase **hex** SHA-256 of it.
+    So the usual pattern works: send `sha256hex(raw)` as `nonce` to `AppleAuthentication.signInAsync`
+    and `raw` to the server (base64 digests do not match). If omitted, no nonce check happens
+    (replay protection is then only the 1 hour age limit), so always send it. 200 response:
+    `{ redirect: false, token, user }` with the bearer in the `set-auth-token` header; 401 for a bad
+    token/audience/nonce.
 - Account deletion (`POST /api/auth/delete-user`): a bearer or cookie session is enough when
   the session is fresh (created within the last 24 h, Better Auth's default `freshAge`) and the body
   is `{}`. Otherwise it fails with 400 `SESSION_EXPIRED`; credential users can instead send
