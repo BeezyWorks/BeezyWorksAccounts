@@ -9,6 +9,8 @@ const env = { ...baseEnv, TRUSTED_ORIGINS: `${baseEnv.TRUSTED_ORIGINS},https://s
 const send = (path: string, init: RequestInit = {}) =>
   worker.fetch(new Request(`${ORIGIN}${path}`, init), env)
 
+let sessN = 1
+
 /** Sign up, verify, sign in; returns the session cookie header (what a browser on the auth origin holds). */
 async function cookieSession() {
   const { email } = await signUp()
@@ -16,7 +18,7 @@ async function cookieSession() {
   await call('GET', link.pathname + link.search)
   const res = await send('/api/auth/sign-in/email', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', origin: ORIGIN, 'cf-connecting-ip': '10.9.9.9' },
+    headers: { 'content-type': 'application/json', origin: ORIGIN, 'cf-connecting-ip': `10.9.${Math.floor(sessN / 250)}.${sessN++ % 250}` },
     body: JSON.stringify({ email, password: PASSWORD }),
   })
   expect(res.status).toBe(200)
@@ -63,7 +65,7 @@ describe('handoff', () => {
 
   it('rejects untrusted or malformed return URLs', async () => {
     const { cookie } = await cookieSession()
-    for (const r of ['https://evil.test/x', 'mishnaapp://cb', 'javascript:alert(1)', 'not a url', '']) {
+    for (const r of ['https://evil.test/x', 'unlistedapp://cb', 'javascript:alert(1)', 'not a url', '']) {
       const res = await send(`/handoff?return=${encodeURIComponent(r)}`, { headers: { cookie } })
       expect(res.status).toBe(400)
       expect(res.headers.get('location')).toBeNull()
@@ -128,5 +130,94 @@ describe('verification link back into an app', () => {
     const loc = new URL(back.headers.get('location')!)
     expect(loc.origin + loc.pathname).toBe('https://siddur.one/account/callback')
     expect(new URLSearchParams(loc.hash.slice(1)).get('ott')).toBeTruthy()
+  })
+})
+
+describe('native (custom-scheme) handoff', () => {
+  const NATIVE = 'siddurone://account/callback'
+  const nenv = { ...env, TRUSTED_ORIGINS: `${env.TRUSTED_ORIGINS},siddurone://` }
+  const nsend = (path: string, init: RequestInit = {}) => worker.fetch(new Request(`${ORIGIN}${path}`, init), nenv)
+
+  it('puts the one-time token in the query; verify (no Origin) yields a bearer, once', async () => {
+    const { cookie } = await cookieSession()
+    const res = await nsend(`/handoff?return=${encodeURIComponent(NATIVE)}`, { headers: { cookie } })
+    expect(res.status).toBe(302)
+    const loc = new URL(res.headers.get('location')!)
+    expect(loc.protocol).toBe('siddurone:')
+    expect(loc.hash).toBe('')
+    expect(loc.searchParams.get('ott')).toBeTruthy()
+    expect(res.headers.get('location')).toMatch(/^siddurone:\/\/account\/callback\?ott=/)
+
+    const verify = () =>
+      nsend('/api/auth/one-time-token/verify', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: loc.searchParams.get('ott') }),
+      })
+    const v = await verify()
+    expect(v.status).toBe(200)
+    const bearer = v.headers.get('set-auth-token')!
+    expect(bearer).toBeTruthy()
+    const sess = await nsend('/api/auth/get-session', { headers: { authorization: `Bearer ${bearer}` } })
+    expect(((await sess.json()) as any).user.email).toBeTruthy()
+    expect((await verify()).status).toBe(400)
+  })
+
+  it('reports no_session in the query', async () => {
+    const res = await nsend(`/handoff?return=${encodeURIComponent(NATIVE)}`)
+    expect(res.status).toBe(302)
+    expect(res.headers.get('location')).toBe(`${NATIVE}?error=no_session`)
+  })
+
+  it('rejects unlisted, forbidden and malformed schemes', async () => {
+    const { cookie } = await cookieSession()
+    const bad = [
+      'otherapp://cb', // not listed
+      'javascript:alert(1)',
+      'data:text/html,hi',
+      'file:///etc/passwd',
+      'siddurone:/account/callback', // scheme not in `scheme://` form
+      'siddurone:account/callback',
+      'siddurone://user:pw@account/callback',
+      'http://siddurone//cb', // http(s) shaped as custom
+      '//account/callback',
+      'siddurone',
+    ]
+    for (const r of bad) {
+      const res = await nsend(`/handoff?return=${encodeURIComponent(r)}`, { headers: { cookie } })
+      expect(res.status, r).toBe(400)
+      expect(res.headers.get('location')).toBeNull()
+    }
+    // Listing an http scheme in custom form must not make it acceptable either.
+    const odd = { ...nenv, TRUSTED_ORIGINS: `${nenv.TRUSTED_ORIGINS},javascript://,https://,file://` }
+    for (const r of ['javascript://x/%0aalert(1)', 'file:///etc/passwd', 'https://evil.test/x']) {
+      const res = await worker.fetch(new Request(`${ORIGIN}/handoff?return=${encodeURIComponent(r)}`, { headers: { cookie } }), odd)
+      expect(res.status, r).toBe(400)
+    }
+    // Without siddurone:// listed, it is rejected.
+    const res = await send(`/handoff?return=${encodeURIComponent(NATIVE)}`, { headers: { cookie } })
+    expect(res.status).toBe(400)
+  })
+
+  it('verification email callbackURL may be a handoff to a custom scheme (sign-up has no Origin)', async () => {
+    const handoff = `${ORIGIN}/handoff?return=${encodeURIComponent(NATIVE)}`
+    const res = await nsend('/api/auth/sign-up/email', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'cf-connecting-ip': '10.9.9.7' },
+      body: JSON.stringify({ email: `native${Date.now()}@example.test`, password: PASSWORD, name: 'N', callbackURL: handoff }),
+    })
+    expect(res.status).toBe(200)
+    const link = new URL(lastMail().link)
+    expect(link.searchParams.get('callbackURL')).toBe(handoff)
+
+    // The mail app opens the link in a browser: no Origin, no cookies.
+    const verified = await nsend(link.pathname + link.search)
+    expect(verified.status).toBe(302)
+    expect(verified.headers.get('location')).toBe(handoff)
+    const cookie = verified.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ')
+    expect(cookie).toContain('session_token')
+
+    const back = await nsend(new URL(handoff).pathname + new URL(handoff).search, { headers: { cookie } })
+    expect(back.headers.get('location')).toMatch(/^siddurone:\/\/account\/callback\?ott=/)
   })
 })

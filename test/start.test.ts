@@ -4,7 +4,7 @@ import { baseEnv, ORIGIN } from './helpers'
 
 const env = {
   ...baseEnv,
-  TRUSTED_ORIGINS: `${baseEnv.TRUSTED_ORIGINS},https://siddur.one`,
+  TRUSTED_ORIGINS: `${baseEnv.TRUSTED_ORIGINS},https://siddur.one,siddurone://`,
   GOOGLE_CLIENT_ID: 'id',
   GOOGLE_CLIENT_SECRET: 's',
 }
@@ -41,5 +41,47 @@ describe('start', () => {
     expect((await start('github')).status).toBe(404)
     expect((await start('google', 'https://evil.test/cb')).status).toBe(400)
     expect((await send('/start/google')).status).toBe(400)
+  })
+})
+
+describe('start (native custom-scheme return)', () => {
+  const NATIVE = 'siddurone://account/callback'
+
+  it('hands off to the custom scheme via the query, and provider errors come back as ?error=', async () => {
+    const res = await start('google', NATIVE)
+    expect(res.status).toBe(302)
+    const location = new URL(res.headers.get('location')!)
+    expect(location.host).toBe('accounts.google.com')
+    // The OAuth callback URL Better Auth stored is the handoff, carrying the native return.
+    const cookie = res.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ')
+    const state = location.searchParams.get('state')!
+    const cb = await send(`/api/auth/callback/google?state=${state}&code=fake`, { headers: { cookie } })
+    expect(cb.status).toBe(302)
+    expect(cb.headers.get('location')).toMatch(/^siddurone:\/\/account\/callback\?error=/)
+
+    // State is single use: start again for the provider-denied case.
+    const again = await start('google', NATIVE)
+    const cookie2 = again.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ')
+    const state2 = new URL(again.headers.get('location')!).searchParams.get('state')!
+    const denied = await send(`/api/auth/callback/google?state=${state2}&error=access_denied`, { headers: { cookie: cookie2 } })
+    expect(denied.headers.get('location')).toMatch(/^siddurone:\/\/account\/callback\?error=/)
+  })
+
+  it('reports start_failed in the query when the provider cannot start', async () => {
+    const off = { ...env, GOOGLE_CLIENT_ID: undefined, GOOGLE_CLIENT_SECRET: undefined }
+    const res = await worker.fetch(
+      new Request(`${ORIGIN}/start/google?return=${encodeURIComponent(NATIVE)}`, { headers: { 'cf-connecting-ip': '10.7.7.8' } }),
+      off,
+    )
+    expect(res.status).toBe(302)
+    expect(res.headers.get('location')).toBe(`${NATIVE}?error=start_failed`)
+  })
+
+  it('rejects unlisted and malformed schemes', async () => {
+    for (const r of ['otherapp://cb', 'javascript:alert(1)', 'data:text/html,hi', 'file:///etc/passwd', 'siddurone:/cb', 'http://siddurone//cb', 'nope']) {
+      const res = await start('google', r)
+      expect(res.status, r).toBe(400)
+      expect(res.headers.get('location')).toBeNull()
+    }
   })
 })
