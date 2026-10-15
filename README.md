@@ -18,9 +18,23 @@ Provider console setup (Google, Apple, Resend, DNS) is in [`docs/SETUP.md`](docs
 | `/api/auth/*` | Better Auth (sign-up, sign-in, sign-out, session, update-user, link/unlink social, delete-user, password reset, social callbacks, ...). Use the `@better-auth/expo` client. |
 | `GET /reset-password?token=...` | Self-contained password-reset form; POSTs to `/api/auth/reset-password`. Reset emails link here. |
 | `GET /verified` | Landing page after email verification (default `callbackURL`). |
+| `GET /api/data/:namespace` | Auth required (bearer token or cookie). `200 { namespace, revision, updatedAt, data }`; nothing stored yet gives `{ namespace, revision: 0, updatedAt: null, data: null }`. |
+| `PUT /api/data/:namespace` | Auth required. Body `{ data, baseRevision? }` (`data` is any JSON value, `null` included; max 256 KB, else 413). If `baseRevision` is given and differs from the current revision (0 when nothing is stored) the response is `409` with the current record (same shape as GET); otherwise the value is stored with `revision = current + 1`, `updatedAt = Date.now()` (ms) and the new record is returned. Omit `baseRevision` to overwrite. The check and write are one SQL statement. |
 | `GET /health` | `{ "ok": true }` |
 
 Notes for clients:
+
+- App data (`/api/data/:namespace`): a per-user, per-namespace JSON store the server treats as
+  opaque, so apps (`siddur`, `mishna`, shared ones like `shared.events`) can sync through the
+  account. `namespace` must match `^[a-z][a-z0-9._-]{0,63}$` (else 400). Errors are
+  `{ "error": "..." }`: 401 no session, 400 bad namespace / invalid JSON / missing `data` /
+  bad `baseRevision`, 405 any method but GET/PUT, 413 body over 256 KB. Rows are deleted with
+  the account. Table: `app_data` (`migrations/0002_app_data.sql`).
+- CORS (`/api/auth/*` and `/api/data/*`): origins listed in `TRUSTED_ORIGINS` that are http(s)
+  (e.g. `https://siddur.one`) get `Access-Control-Allow-Origin` (echoed), `Allow-Credentials: true`,
+  `Expose-Headers: set-auth-token` and `Vary: Origin`; OPTIONS preflights return 204 with methods
+  `GET, POST, PUT, DELETE, OPTIONS` and headers `content-type, authorization`. Other origins get none.
+  Better Auth itself only emits `Expose-Headers` (bearer plugin), so the Worker adds the rest.
 
 - Display name: `displayName ?? \`${firstName} ${lastName}\``, falling back to `name`.
   Better Auth's `name` is kept in sync server-side (displayName, else "first last",

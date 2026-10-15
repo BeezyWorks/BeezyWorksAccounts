@@ -2,6 +2,7 @@ import { expo } from '@better-auth/expo'
 import { betterAuth } from 'better-auth'
 import { bearer } from 'better-auth/plugins'
 import { decodeJwt } from 'jose'
+import { deleteUserData } from './data'
 import { getAppleClientSecret, getAppleConfig, revokeAppleToken } from './apple'
 import { resetMail, sendMail, verificationMail } from './email'
 import { parseList, type Env } from './env'
@@ -118,6 +119,10 @@ export async function createAuth(env: Env) {
       },
       deleteUser: {
         enabled: true,
+        // The FK cascade should already do this; delete explicitly in case D1 does not enforce it.
+        afterDelete: async (user) => {
+          await deleteUserData(env, user.id)
+        },
         beforeDelete: async (user) => {
           if (!apple) return
           try {
