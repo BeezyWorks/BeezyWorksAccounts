@@ -56,6 +56,9 @@ export async function createAuth(env: Env) {
     },
     emailVerification: {
       sendOnSignUp: true,
+      // Clicking the link signs the user in, so an app can pass a callbackURL
+      // through /handoff and land back in the app already signed in.
+      autoSignInAfterVerification: true,
       sendVerificationEmail: async ({ user, url }) => {
         await sendMail(env, verificationMail(user.email, str(user.name), verificationLink(url, baseURL)))
       },

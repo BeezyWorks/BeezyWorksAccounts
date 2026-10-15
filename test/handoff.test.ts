@@ -105,3 +105,28 @@ describe('handoff', () => {
     expect(((await res.json()) as any).message).toBe('User deleted')
   })
 })
+
+describe('verification link back into an app', () => {
+  it('signs in on verify and hands the session to the callbackURL', async () => {
+    const handoff = `${ORIGIN}/handoff?return=${encodeURIComponent('https://siddur.one/account/callback')}`
+    const res = await send('/api/auth/sign-up/email', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: 'https://siddur.one', 'cf-connecting-ip': '10.9.9.8' },
+      body: JSON.stringify({ email: `verify${Date.now()}@example.test`, password: PASSWORD, name: 'V', callbackURL: handoff }),
+    })
+    expect(res.status).toBe(200)
+    const link = new URL(lastMail().link)
+    expect(link.searchParams.get('callbackURL')).toBe(handoff)
+
+    const verified = await send(link.pathname + link.search)
+    expect(verified.status).toBe(302)
+    expect(verified.headers.get('location')).toBe(handoff)
+    const cookie = verified.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ')
+    expect(cookie).toContain('session_token')
+
+    const back = await send(new URL(handoff).pathname + new URL(handoff).search, { headers: { cookie } })
+    const loc = new URL(back.headers.get('location')!)
+    expect(loc.origin + loc.pathname).toBe('https://siddur.one/account/callback')
+    expect(new URLSearchParams(loc.hash.slice(1)).get('ott')).toBeTruthy()
+  })
+})
