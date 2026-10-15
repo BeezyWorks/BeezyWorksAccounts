@@ -1,6 +1,8 @@
 import { AUTH_BASE_PATH, createAuth } from './auth'
 import { DATA_BASE_PATH, handleData } from './data'
-import { parseList, type Env } from './env'
+import { CORS_METHODS, withCors, allowedOrigin } from './cors'
+import { handleHandoff } from './handoff'
+import type { Env } from './env'
 import { resetPasswordPage, verifiedPage } from './pages'
 
 export type { Env } from './env'
@@ -16,36 +18,6 @@ const html = (body: string) =>
     },
   })
 
-const CORS_METHODS = 'GET, POST, PUT, DELETE, OPTIONS'
-
-/** The request's Origin if it is an http(s) origin listed in TRUSTED_ORIGINS, else null. */
-function allowedOrigin(request: Request, env: Env): string | null {
-  const origin = request.headers.get('origin')
-  if (!origin) return null
-  try {
-    const u = new URL(origin)
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null
-    return parseList(env.TRUSTED_ORIGINS).includes(u.origin) ? u.origin : null
-  } catch {
-    return null
-  }
-}
-
-/** Better Auth only emits Access-Control-Expose-Headers (bearer plugin), so own the rest here. */
-function withCors(res: Response, origin: string | null): Response {
-  const out = new Response(res.body, res)
-  out.headers.append('vary', 'Origin')
-  if (!origin) return out
-  const expose = new Set(
-    (out.headers.get('access-control-expose-headers') ?? '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean),
-  )
-  expose.add('set-auth-token')
-  out.headers.set('access-control-allow-origin', origin)
-  out.headers.set('access-control-allow-credentials', 'true')
-  out.headers.set('access-control-expose-headers', [...expose].join(', '))
-  return out
-}
-
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
@@ -55,6 +27,7 @@ export default {
     if (request.method === 'GET' || request.method === 'HEAD') {
       if (pathname === '/reset-password') return html(resetPasswordPage(url.searchParams.get('token')))
       if (pathname === '/verified') return html(verifiedPage())
+      if (pathname === '/handoff') return handleHandoff(request, env)
     }
     const isAuth = pathname === AUTH_BASE_PATH || pathname.startsWith(`${AUTH_BASE_PATH}/`)
     const isData = pathname === DATA_BASE_PATH || pathname.startsWith(`${DATA_BASE_PATH}/`)

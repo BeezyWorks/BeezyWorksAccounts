@@ -20,9 +20,24 @@ Provider console setup (Google, Apple, Resend, DNS) is in [`docs/SETUP.md`](docs
 | `GET /verified` | Landing page after email verification (default `callbackURL`). |
 | `GET /api/data/:namespace` | Auth required (bearer token or cookie). `200 { namespace, revision, updatedAt, data }`; nothing stored yet gives `{ namespace, revision: 0, updatedAt: null, data: null }`. |
 | `PUT /api/data/:namespace` | Auth required. Body `{ data, baseRevision? }` (`data` is any JSON value, `null` included; max 256 KB, else 413). If `baseRevision` is given and differs from the current revision (0 when nothing is stored) the response is `409` with the current record (same shape as GET); otherwise the value is stored with `revision = current + 1`, `updatedAt = Date.now()` (ms) and the new record is returned. Omit `baseRevision` to overwrite. The check and write are one SQL statement. |
+| `GET /handoff?return=<url>` | Web social sign-in handoff. `return` must be an http(s) URL whose origin is in `TRUSTED_ORIGINS` (else 400 plain text). With a cookie session, 302 to `<return>#ott=<one-time token>` (valid 3 minutes); with none, 302 to `<return>#error=no_session`. `no-store`, `no-referrer`. |
 | `GET /health` | `{ "ok": true }` |
 
 Notes for clients:
+
+- Web social sign-in from another site (e.g. https://siddur.one, where cookies on the auth
+  origin are third-party): `POST /api/auth/sign-in/social { provider, callbackURL:
+  "https://auth.baderech.app/handoff?return=https://siddur.one/account/callback",
+  disableRedirect: true }`, navigate to the returned `url`; after sign-in the browser lands on
+  `/handoff`, then on `return#ott=...`. The page reads the fragment and calls
+  `POST /api/auth/one-time-token/verify { token }` (CORS applies). The token is single use and
+  the response carries the bearer token in the `set-auth-token` header (body is `{ session, user }`);
+  send it as `Authorization: Bearer <token>` to `/api/auth/*` and `/api/data/*`. Failures come back
+  as `return#error=no_session`.
+- Account deletion (`POST /api/auth/delete-user`): a bearer or cookie session is enough when
+  the session is fresh (created within the last 24 h, Better Auth's default `freshAge`) and the body
+  is `{}`. Otherwise it fails with 400 `SESSION_EXPIRED`; credential users can instead send
+  `{ password }` at any session age. No email confirmation is configured.
 
 - App data (`/api/data/:namespace`): a per-user, per-namespace JSON store the server treats as
   opaque, so apps (`siddur`, `mishna`, shared ones like `shared.events`) can sync through the

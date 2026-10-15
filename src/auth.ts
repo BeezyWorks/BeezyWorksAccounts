@@ -1,6 +1,6 @@
 import { expo } from '@better-auth/expo'
 import { betterAuth } from 'better-auth'
-import { bearer } from 'better-auth/plugins'
+import { bearer, oneTimeToken } from 'better-auth/plugins'
 import { decodeJwt } from 'jose'
 import { deleteUserData } from './data'
 import { getAppleClientSecret, getAppleConfig, revokeAppleToken } from './apple'
@@ -42,7 +42,7 @@ export async function createAuth(env: Env) {
       ...parseList(env.TRUSTED_ORIGINS),
       ...(apple ? ['https://appleid.apple.com'] : []), // Apple posts the callback (form_post)
     ],
-    plugins: [expo(), bearer()],
+    plugins: [expo(), bearer(), oneTimeToken({ expiresIn: 3 })],
 
     emailAndPassword: {
       enabled: true,
