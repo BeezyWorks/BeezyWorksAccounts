@@ -21,6 +21,8 @@ Provider console setup (Google, Apple, Resend, DNS) is in [`docs/SETUP.md`](docs
 | `GET /api/data/:namespace` | Auth required (bearer token or cookie). `200 { namespace, revision, updatedAt, data }`; nothing stored yet gives `{ namespace, revision: 0, updatedAt: null, data: null }`. |
 | `PUT /api/data/:namespace` | Auth required. Body `{ data, baseRevision? }` (`data` is any JSON value, `null` included; max 256 KB, else 413). If `baseRevision` is given and differs from the current revision (0 when nothing is stored) the response is `409` with the current record (same shape as GET); otherwise the value is stored with `revision = current + 1`, `updatedAt = Date.now()` (ms) and the new record is returned. Omit `baseRevision` to overwrite. The check and write are one SQL statement. |
 | `GET /handoff?return=<url>` | Web social sign-in handoff. `return` must be an http(s) URL whose origin is in `TRUSTED_ORIGINS`, or a custom-scheme app URL whose `scheme://` is listed there (see Native apps); else 400 plain text. With a cookie session, 302 to `<return>#ott=<one-time token>` (valid 3 minutes); with none, 302 to `<return>#error=no_session`. `no-store`, `no-referrer`. |
+| `GET /oauth/sign-in`, `GET /oauth/consent` | Pages for the OAuth server below (sign-in, then "Allow / Deny"); reached only through `/api/auth/oauth2/authorize`. |
+| `/.well-known/oauth-authorization-server/api/auth`, `/.well-known/oauth-protected-resource` | OAuth discovery (also under `/api/auth/.well-known/...`). |
 | `GET /health` | `{ "ok": true }` |
 
 Notes for clients:
@@ -165,3 +167,20 @@ pnpm deploy                                 # wrangler deploy
 3. Use the `@better-auth/expo` client with `baseURL: "https://auth.baderech.app"` and
    its `scheme`; store the session in `expo-secure-store`.
 4. Redeploy (`pnpm deploy`).
+
+
+## OAuth server for Beitecha's MCP endpoint
+
+Better Auth's `@better-auth/mcp` plugin (with `jwt()`) makes this service the OAuth 2.1 authorization server for
+`https://beitecha.baderech.app/mcp`, the only resource (token audience). Scopes: `openid`, `offline_access`,
+`beitecha:write`. Do not add `oauthProvider()` (the `mcp()` plugin is the provider).
+
+- Endpoints (issuer `https://auth.baderech.app/api/auth`): `/api/auth/oauth2/authorize`, `/oauth2/token`,
+  `/oauth2/register` (dynamic client registration, public clients, PKCE S256 required), `/api/auth/jwks`.
+- Tokens are JWTs (`aud` = the resource, `scope`, `azp` = client). They are not session tokens: the `bearer()`
+  plugin and `/api/data` reject them. Beitecha verifies them against `/api/auth/jwks` over its service binding.
+- Client identity: dynamic client registration, not Client ID Metadata Documents. CIMD needs a fetch transport that
+  pins the resolved IP; Workers can only fetch hostnames, so it can't be done. The consent page shows the client's
+  self-asserted name and the host it will return to.
+- Schema: `migrations/0003_oauth.sql` (`jwks`, `oauth*`). Existing tables are unchanged; DPoP proof ids go in
+  `verification`.

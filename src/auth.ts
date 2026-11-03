@@ -1,6 +1,7 @@
 import { expo } from '@better-auth/expo'
+import { mcp } from '@better-auth/mcp'
 import { betterAuth } from 'better-auth'
-import { bearer, oneTimeToken } from 'better-auth/plugins'
+import { bearer, jwt, oneTimeToken } from 'better-auth/plugins'
 import { decodeJwt } from 'jose'
 import { deleteUserData } from './data'
 import { getAppleClientSecret, getAppleConfig, revokeAppleToken } from './apple'
@@ -9,6 +10,12 @@ import { parseList, type Env } from './env'
 import { displayNameOf } from './names'
 
 export const AUTH_BASE_PATH = '/api/auth'
+
+/** The one resource (token audience) this server issues OAuth tokens for: Beitecha's remote MCP endpoint. */
+export const MCP_RESOURCE = 'https://beitecha.baderech.app/mcp'
+export const MCP_SCOPES = ['openid', 'offline_access', 'beitecha:write']
+export const OAUTH_SIGN_IN_PAGE = '/oauth/sign-in'
+export const OAUTH_CONSENT_PAGE = '/oauth/consent'
 
 const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined)
 
@@ -42,7 +49,24 @@ export async function createAuth(env: Env) {
       ...parseList(env.TRUSTED_ORIGINS),
       ...(apple ? ['https://appleid.apple.com'] : []), // Apple posts the callback (form_post)
     ],
-    plugins: [expo(), bearer(), oneTimeToken({ expiresIn: 3 })],
+    plugins: [
+      expo(),
+      bearer(),
+      oneTimeToken({ expiresIn: 3 }),
+      // OAuth server for Beitecha's MCP endpoint (the mcp plugin is the OAuth provider; never add oauthProvider()).
+      jwt(),
+      mcp({
+        loginPage: OAUTH_SIGN_IN_PAGE,
+        consentPage: OAUTH_CONSENT_PAGE,
+        resource: MCP_RESOURCE,
+        scopes: MCP_SCOPES,
+        clientRegistrationDefaultScopes: MCP_SCOPES,
+        // Chat apps (Claude.ai) register themselves. CIMD was ruled out: Workers can't pin a resolved IP.
+        allowDynamicClientRegistration: true,
+        allowUnauthenticatedClientRegistration: true,
+        clientRegistrationDefaultApplicationType: 'infer',
+      }),
+    ],
 
     emailAndPassword: {
       enabled: true,

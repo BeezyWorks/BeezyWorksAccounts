@@ -1,10 +1,10 @@
-import { AUTH_BASE_PATH, createAuth } from './auth'
+import { AUTH_BASE_PATH, OAUTH_CONSENT_PAGE, OAUTH_SIGN_IN_PAGE, createAuth } from './auth'
 import { DATA_BASE_PATH, handleData } from './data'
 import { CORS_METHODS, withCors, allowedOrigin } from './cors'
 import { handleHandoff } from './handoff'
 import { handleStart } from './start'
 import type { Env } from './env'
-import { resetPasswordPage, verifiedPage } from './pages'
+import { oauthConsentPage, oauthSignInPage, resetPasswordPage, verifiedPage } from './pages'
 
 export type { Env } from './env'
 
@@ -28,10 +28,17 @@ export default {
     if (request.method === 'GET' || request.method === 'HEAD') {
       if (pathname === '/reset-password') return html(resetPasswordPage(url.searchParams.get('token')))
       if (pathname === '/verified') return html(verifiedPage())
+      if (pathname === OAUTH_SIGN_IN_PAGE) return html(oauthSignInPage())
+      if (pathname === OAUTH_CONSENT_PAGE) return html(oauthConsentPage())
       if (pathname === '/handoff') return handleHandoff(request, env)
       if (pathname.startsWith('/start/')) return handleStart(request, env, pathname.slice('/start/'.length))
     }
-    const isAuth = pathname === AUTH_BASE_PATH || pathname.startsWith(`${AUTH_BASE_PATH}/`)
+    // OAuth/OIDC discovery lives under /.well-known (issuer-path aliases) as well as under the auth base path.
+    const isAuth =
+      pathname === AUTH_BASE_PATH ||
+      pathname.startsWith(`${AUTH_BASE_PATH}/`) ||
+      pathname.startsWith('/.well-known/oauth-') ||
+      pathname.startsWith('/.well-known/openid-')
     const isData = pathname === DATA_BASE_PATH || pathname.startsWith(`${DATA_BASE_PATH}/`)
     if (isAuth || isData) {
       const origin = allowedOrigin(request, env)
