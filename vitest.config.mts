@@ -16,6 +16,8 @@ export default defineConfig(async () => {
             BETTER_AUTH_SECRET: 'test-secret-test-secret-test-secret-0123',
             BETTER_AUTH_URL: 'https://auth.test',
             TRUSTED_ORIGINS: 'mishnaapp://,https://mishna.test',
+            MCP_REDIRECT_URIS:
+              'https://claude.ai/api/mcp/auth_callback,https://chatgpt.com/connector_platform_oauth_redirect,https://chatgpt.com/connector/oauth/*,http://localhost:*',
           },
         },
       }),

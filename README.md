@@ -182,5 +182,10 @@ Better Auth's `@better-auth/mcp` plugin (with `jwt()`) makes this service the OA
 - Client identity: dynamic client registration, not Client ID Metadata Documents. CIMD needs a fetch transport that
   pins the resolved IP; Workers can only fetch hostnames, so it can't be done. The consent page shows the client's
   self-asserted name and the host it will return to.
+- Registration allowlist: `MCP_REDIRECT_URIS` (wrangler vars; comma-separated; exact URI, `prefix*`, or `http://localhost:*`).
+  Any other redirect URI gets `400 invalid_redirect_uri` at `/oauth2/register`, and authorize re-checks it. Loopback is
+  not in the production list; add `http://localhost:*` in `.dev.vars` for local clients.
+- `/oauth/sign-in` also offers Google and Apple (only when configured); the signed `oauth_query` rides through the
+  provider round trip and the user lands on consent.
 - Schema: `migrations/0003_oauth.sql` (`jwks`, `oauth*`). Existing tables are unchanged; DPoP proof ids go in
   `verification`.

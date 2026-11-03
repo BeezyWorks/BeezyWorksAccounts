@@ -6,7 +6,7 @@ import { createAuth, MCP_RESOURCE } from '../src/auth'
 import worker from '../src/index'
 import { baseEnv, call, ORIGIN, PASSWORD, signUp, lastMail, verifiedSession } from './helpers'
 
-const REDIRECT = 'https://claude.example/api/mcp/auth_callback'
+const REDIRECT = 'https://claude.ai/api/mcp/auth_callback'
 const ISSUER = `${ORIGIN}/api/auth`
 const b64u = (b: Buffer) => b.toString('base64url')
 
@@ -336,5 +336,132 @@ describe('d1: dpop replay protection', () => {
     } finally {
       globalThis.fetch = origFetch
     }
+  })
+})
+
+describe('registration allowlist', () => {
+  it.each([
+    ['https://claude.ai/api/mcp/auth_callback'],
+    ['https://chatgpt.com/connector_platform_oauth_redirect'],
+    ['https://chatgpt.com/connector/oauth/abc123'],
+    ['http://localhost:3118/callback'], // allowed here only because the test env lists it
+  ])('accepts %s', async (uri) => {
+    const r = await registerClient({ redirect_uris: [uri] })
+    expect(r.status, JSON.stringify(r.data)).toBe(201)
+  })
+
+  it.each([
+    ['https://evil.example/api/mcp/auth_callback'],
+    ['https://claude.ai.evil.example/api/mcp/auth_callback'],
+    ['https://claude.ai/other'],
+    ['https://claude.ai/api/mcp/auth_callback#x'],
+    ['http://claude.ai/api/mcp/auth_callback'],
+    ['http://127.0.0.1:3000/cb'],
+    ['http://localhost/cb'],
+    ['http://localhost.evil.example:3000/cb'],
+    ['https://chatgpt.com/other'],
+    ['myapp://callback'],
+  ])('rejects %s with invalid_redirect_uri', async (uri) => {
+    const r = await registerClient({ redirect_uris: [uri] })
+    expect(r.status).toBe(400)
+    expect(r.data.error).toBe('invalid_redirect_uri')
+  })
+
+  it('rejects when any one of several is off the list, and when none are given', async () => {
+    expect((await registerClient({ redirect_uris: [REDIRECT, 'https://evil.example/cb'] })).data.error).toBe('invalid_redirect_uri')
+    expect((await registerClient({ redirect_uris: [] })).status).toBe(400)
+  })
+
+  it('leaves loopback out when the env does not list it', async () => {
+    const env = { ...baseEnv, MCP_REDIRECT_URIS: 'https://claude.ai/api/mcp/auth_callback' }
+    const r = await call('POST', '/api/auth/oauth2/register', { client_name: 'x', redirect_uris: ['http://localhost:3118/callback'], token_endpoint_auth_method: 'none' }, { env })
+    expect(r.data.error).toBe('invalid_redirect_uri')
+  })
+
+  it('an authorize request with an unregistered or off-list redirect still fails', async () => {
+    const clientId = (await registerClient()).data.client_id as string
+    const res = await new Browser().fetch(
+      `/api/auth/oauth2/authorize?${new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: 'https://claude.ai/api/mcp/other', scope: 'openid', state: 's', code_challenge: 'a'.repeat(43), code_challenge_method: 'S256', resource: MCP_RESOURCE })}`,
+    )
+    expect(res.headers.get('location') ?? '').not.toContain('claude.ai/api/mcp/other')
+    expect(res.headers.get('location') ?? '').not.toContain('/oauth/sign-in')
+  })
+})
+
+describe('social sign-in on the oauth page', () => {
+  it('shows a button only for configured providers', async () => {
+    const page = async (e: typeof baseEnv) => (await (await worker.fetch(new Request(`${ORIGIN}/oauth/sign-in`), e)).text())
+    const none = await page(baseEnv)
+    expect(none).not.toContain('Continue with')
+    const g = await page({ ...baseEnv, GOOGLE_CLIENT_ID: 'gid', GOOGLE_CLIENT_SECRET: 'gsecret' })
+    expect(g).toContain('Continue with Google')
+    expect(g).not.toContain('Continue with Apple')
+  })
+
+  it('Google sign-in with the signed query ends on the consent page', async () => {
+    const env = { ...baseEnv, GOOGLE_CLIENT_ID: 'gid', GOOGLE_CLIENT_SECRET: 'gsecret' }
+    const clientId = (await registerClient()).data.client_id as string
+    const b = new Browser()
+    const { challenge } = pkce()
+    const a1 = await b.fetch(
+      `/api/auth/oauth2/authorize?${new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: REDIRECT, scope: 'openid offline_access beitecha:write', state: 's', code_challenge: challenge, code_challenge_method: 'S256', resource: MCP_RESOURCE })}`,
+    )
+    const si = new URL(a1.headers.get('location')!, ORIGIN)
+    const names = si.searchParams.getAll('ba_param')
+    const oauth_query = new URLSearchParams([...si.searchParams].filter(([k]) => k === 'sig' || k === 'ba_param' || names.includes(k))).toString()
+
+    const post = async (path: string, body: unknown) =>
+      worker.fetch(
+        new Request(new URL(path, ORIGIN), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: [...b.jar].map(([k, v]) => `${k}=${v}`).join('; '), 'cf-connecting-ip': '10.7.1.1' },
+          body: JSON.stringify(body),
+          redirect: 'manual',
+        }),
+        env,
+      )
+    const s = await post('/api/auth/sign-in/social', { provider: 'google', callbackURL: '/oauth/sign-in', disableRedirect: true, oauth_query })
+    expect(s.status).toBe(200)
+    for (const c of s.headers.getSetCookie()) {
+      const [kv] = c.split(';')
+      const i = kv.indexOf('=')
+      b.jar.set(kv.slice(0, i), kv.slice(i + 1))
+    }
+    const authUrl = new URL(((await s.json()) as any).url)
+    expect(authUrl.origin).toBe('https://accounts.google.com')
+    const state = authUrl.searchParams.get('state')!
+
+    // Fake Google's token endpoint.
+    const idToken = await new SignJWT({ email: `g${Date.now()}@example.test`, email_verified: true, name: 'Office Manager', given_name: 'Office', family_name: 'Manager' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setSubject('google-sub-1')
+      .setIssuer('https://accounts.google.com')
+      .setAudience('gid')
+      .setIssuedAt()
+      .setExpirationTime('1h')
+      .sign(new TextEncoder().encode('k'.repeat(32)))
+    const real = globalThis.fetch
+    globalThis.fetch = (async (input: any, init?: any) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (url.startsWith('https://oauth2.googleapis.com/token')) return Response.json({ access_token: 'at', id_token: idToken, token_type: 'Bearer', expires_in: 3600 })
+      return real(input, init)
+    }) as typeof fetch
+    let cb: Response
+    try {
+      cb = await worker.fetch(
+        new Request(`${ORIGIN}/api/auth/callback/google?code=abc&state=${encodeURIComponent(state)}`, {
+          headers: { cookie: [...b.jar].map(([k, v]) => `${k}=${v}`).join('; '), 'cf-connecting-ip': '10.7.1.2', accept: 'text/html' },
+          redirect: 'manual',
+        }),
+        env,
+      )
+    } finally {
+      globalThis.fetch = real
+    }
+    expect(cb.status).toBe(302)
+    const landed = new URL(cb.headers.get('location')!, ORIGIN)
+    expect(landed.pathname).toBe('/oauth/consent')
+    expect(landed.searchParams.get('client_id')).toBe(clientId)
+    expect(landed.searchParams.get('sig')).toBeTruthy()
   })
 })

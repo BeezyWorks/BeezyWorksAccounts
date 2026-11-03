@@ -23,6 +23,8 @@ export interface Env {
   APPLE_SERVICES_ID?: string
   /** Comma-separated iOS bundle IDs whose native id tokens are accepted. */
   APPLE_APP_BUNDLE_IDS?: string
+  /** Comma-separated redirect URIs OAuth clients may register (see src/redirects.ts). */
+  MCP_REDIRECT_URIS?: string
 }
 
 export const DEFAULT_EMAIL_FROM = 'Baderech <noreply@baderech.app>'

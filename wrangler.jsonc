@@ -22,6 +22,9 @@
 		"TRUSTED_ORIGINS": "mishnaapp://,https://mishna.baderech.app,siddurone://,https://siddur.baderech.app,https://tefila.baderech.app,https://siddur.one,https://beitecha.baderech.app",
 		"COOKIE_DOMAIN": "baderech.app",
 		"APPLE_SERVICES_ID": "com.beezyworks.accounts",
-		"APPLE_APP_BUNDLE_IDS": "com.beezyworks.siddurone"
+		"APPLE_APP_BUNDLE_IDS": "com.beezyworks.siddurone",
+		// Dynamic client registration only accepts these redirect URIs (Claude: claude.com/docs/connectors/building/authentication;
+		// ChatGPT: developers.openai.com/apps-sdk/build/auth). No loopback in production; add "http://localhost:*" in .dev.vars only.
+		"MCP_REDIRECT_URIS": "https://claude.ai/api/mcp/auth_callback,https://chatgpt.com/connector_platform_oauth_redirect,https://chatgpt.com/connector/oauth/*"
 	}
 }

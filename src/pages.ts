@@ -59,19 +59,26 @@ function go(d){var u=d&&(d.url||d.redirect_uri);if(u){location.href=u;return tru
 var q=new URLSearchParams(location.search),m=document.getElementById('m'),who=document.getElementById('who');
 function fail(t){m.className='err';m.textContent=t}`
 
-export function oauthSignInPage(): string {
+export function oauthSignInPage(providers: readonly string[] = []): string {
   const body = `<h1>Sign in to Baderech</h1>
 <p id="who"></p>
 <form id="f">
 <label for="e">Email</label><input id="e" type="email" autocomplete="username" required>
 <label for="p">Password</label><input id="p" type="password" autocomplete="current-password" required>
-<button id="b" type="submit">Sign in</button></form><p id="m" role="status"></p>
+<button id="b" type="submit">Sign in</button></form>${providers
+    .map((p) => `<button type="button" class="alt social" data-p="${esc(p)}">Continue with ${p === 'apple' ? 'Apple' : 'Google'}</button>`)
+    .join('')}<p id="m" role="status"></p>
 <p class="small">Use the same account you use in the Siddur or Beitecha. Forgot your password? Reset it from the app, then come back.</p>`
   const script = `${OAUTH_QUERY_JS}
 var b=document.getElementById('b'),f=document.getElementById('f');
 if(!oq())fail('This sign-in link is not valid. Please start again from the app that sent you here.');
 else if(q.get('client_id'))post('/api/auth/oauth2/public-client-prelogin',{client_id:q.get('client_id'),oauth_query:oq()}).then(function(x){
 if(x.ok&&x.d&&x.d.client_name)who.textContent='Signing in for '+x.d.client_name+'.'});
+document.querySelectorAll('.social').forEach(function(s){s.addEventListener('click',function(){m.className='';m.textContent='';
+if(!oq())return fail('This sign-in link is not valid. Please start again from the app that sent you here.');
+post('/api/auth/sign-in/social',{provider:s.dataset.p,callbackURL:'/oauth/sign-in',errorCallbackURL:location.pathname+location.search,disableRedirect:true,oauth_query:oq()})
+.then(function(x){if(x.ok&&go(x.d))return;fail((x.d&&x.d.message)||'We could not start that sign-in.')})
+.catch(function(){fail('Network error. Please try again.')})})});
 f.addEventListener('submit',function(e){e.preventDefault();m.className='';m.textContent='';
 if(!oq())return fail('This sign-in link is not valid. Please start again from the app that sent you here.');
 b.disabled=true;

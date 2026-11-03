@@ -8,6 +8,7 @@ import { getAppleClientSecret, getAppleConfig, revokeAppleToken } from './apple'
 import { resetMail, sendMail, verificationMail } from './email'
 import { parseList, type Env } from './env'
 import { displayNameOf } from './names'
+import { redirectAllowed } from './redirects'
 
 export const AUTH_BASE_PATH = '/api/auth'
 
@@ -65,6 +66,8 @@ export async function createAuth(env: Env) {
         allowDynamicClientRegistration: true,
         allowUnauthenticatedClientRegistration: true,
         clientRegistrationDefaultApplicationType: 'infer',
+        // Registration is allowlisted in index.ts; this keeps authorize requests to the same list.
+        validateRedirectUri: (uri, _registered, defaultResult) => defaultResult && redirectAllowed(uri, env),
       }),
     ],
 
