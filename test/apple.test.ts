@@ -136,8 +136,8 @@ describe('native apple sign-in (id token)', () => {
 
   /** Fake Apple: a local key whose public half is served at Apple's JWKS URL. */
   async function fakeApple() {
-    const { publicKey, privateKey } = await generateKeyPair('ES256', { extractable: true })
-    const jwk = { ...(await exportJWK(publicKey)), kid: 'apple-test-kid', alg: 'ES256', use: 'sig' }
+    const { publicKey, privateKey } = await generateKeyPair('RS256', { extractable: true })
+    const jwk = { ...(await exportJWK(publicKey)), kid: 'apple-test-kid', alg: 'RS256', use: 'sig' }
     const real = globalThis.fetch
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
@@ -146,7 +146,7 @@ describe('native apple sign-in (id token)', () => {
     })
     return (claims: Record<string, unknown> = {}, aud = BUNDLE) =>
       new SignJWT({ email: `apple${Date.now()}${Math.random().toString(36).slice(2, 6)}@privaterelay.test`, email_verified: 'true', ...claims })
-        .setProtectedHeader({ alg: 'ES256', kid: 'apple-test-kid' })
+        .setProtectedHeader({ alg: 'RS256', kid: 'apple-test-kid' })
         .setIssuer('https://appleid.apple.com')
         .setAudience(aud)
         .setSubject(`apple-sub-${Math.random().toString(36).slice(2)}`)
@@ -183,11 +183,11 @@ describe('native apple sign-in (id token)', () => {
     const sign = await fakeApple()
     expect((await signIn({ idToken: { token: await sign({}, 'com.someone.else') } })).status).toBe(401)
     const forged = await new SignJWT({ email: 'x@y.test' })
-      .setProtectedHeader({ alg: 'ES256', kid: 'apple-test-kid' })
+      .setProtectedHeader({ alg: 'RS256', kid: 'apple-test-kid' })
       .setIssuer('https://appleid.apple.com')
       .setAudience(BUNDLE)
       .setExpirationTime('10m')
-      .sign((await generateKeyPair('ES256')).privateKey)
+      .sign((await generateKeyPair('RS256')).privateKey)
     expect((await signIn({ idToken: { token: forged } })).status).toBe(401)
   })
 
