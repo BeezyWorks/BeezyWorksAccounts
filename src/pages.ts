@@ -93,7 +93,7 @@ export function oauthConsentPage(): string {
   const body = `<h1>Allow access?</h1>
 <p><strong id="name">An app</strong> wants to manage your shul's notices in Beitecha.</p>
 <p class="small">It can read your shul's schedule and add or change notices, such as sponsorships, on your behalf. You can revoke it any time in Beitecha. It will return you to <strong id="host">its own site</strong>.</p>
-<p class="small">Only allow this if you just asked this app to connect to Beitecha.</p>
+<p class="small">Only allow this if you just asked this app to connect to a BeezyWorks app.</p>
 <button id="a" type="button">Allow</button><button id="d" type="button" class="alt">Deny</button><p id="m" role="status"></p>`
   const script = `${OAUTH_QUERY_JS}
 var a=document.getElementById('a'),d=document.getElementById('d');
