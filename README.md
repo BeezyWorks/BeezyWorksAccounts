@@ -166,19 +166,31 @@ pnpm deploy                                 # wrangler deploy
 2. Add its iOS bundle ID to `APPLE_APP_BUNDLE_IDS`.
 3. Use the `@better-auth/expo` client with `baseURL: "https://auth.baderech.app"` and
    its `scheme`; store the session in `expo-secure-store`.
-4. Redeploy (`pnpm deploy`).
+4. If the app has a remote MCP endpoint: add a `{ identifier, name, allowedScopes }` entry to `MCP_RESOURCES` and its
+   `<app>:write` scope to `MCP_SCOPES` in `src/auth.ts` (see the OAuth section), plus tests.
+5. Redeploy (`pnpm deploy`).
 
 
-## OAuth server for Beitecha's MCP endpoint
+## OAuth server for the apps' MCP endpoints (Beitecha, Bishul)
 
-Better Auth's `@better-auth/mcp` plugin (with `jwt()`) makes this service the OAuth 2.1 authorization server for
-`https://beitecha.baderech.app/mcp`, the only resource (token audience). Scopes: `openid`, `offline_access`,
-`beitecha:write`. Do not add `oauthProvider()` (the `mcp()` plugin is the provider).
+Better Auth's `@better-auth/mcp` plugin (with `jwt()`) makes this service the OAuth 2.1 authorization server for two
+resources (token audiences), chosen per request by the RFC 8707 `resource` parameter:
+
+| Resource (`aud`) | Write scope |
+| --- | --- |
+| `https://beitecha.baderech.app/mcp` | `beitecha:write` |
+| `https://bishul.baderech.app/mcp` | `bishul:write` |
+
+Every token may also carry `openid` and `offline_access`. Each resource has an `allowedScopes` cap (`MCP_RESOURCES` in
+`src/auth.ts`), so a token for one app never carries the other app's write scope, whatever the client asked for or
+registered. A `resource` that is not listed is refused with `invalid_target`. The plugin's single `resource` option
+(Beitecha) only picks which resource gets protected-resource metadata here; the rest come from `resources`. Each app's
+worker serves its own `/.well-known/oauth-protected-resource`. Do not add `oauthProvider()` (the `mcp()` plugin is the provider).
 
 - Endpoints (issuer `https://auth.baderech.app/api/auth`): `/api/auth/oauth2/authorize`, `/oauth2/token`,
   `/oauth2/register` (dynamic client registration, public clients, PKCE S256 required), `/api/auth/jwks`.
 - Tokens are JWTs (`aud` = the resource, `scope`, `azp` = client). They are not session tokens: the `bearer()`
-  plugin and `/api/data` reject them. Beitecha verifies them against `/api/auth/jwks` over its service binding.
+  plugin and `/api/data` reject them. Each app's MCP worker verifies them against `/api/auth/jwks` (issuer, its own `aud`, its own write scope).
 - Client identity: dynamic client registration, not Client ID Metadata Documents. CIMD needs a fetch transport that
   pins the resolved IP; Workers can only fetch hostnames, so it can't be done. The consent page shows the client's
   self-asserted name and the host it will return to.

@@ -33,7 +33,7 @@ export async function checkRegistration(request: Request, env: Env): Promise<Res
   return Response.json(
     {
       error: 'invalid_redirect_uri',
-      error_description: 'This redirect URI is not on the list of apps allowed to connect to Beitecha.',
+      error_description: 'This redirect URI is not on the list of apps allowed to connect to BeezyWorks apps.',
     },
     { status: 400, headers: { 'cache-control': 'no-store' } },
   )

@@ -12,9 +12,20 @@ import { redirectAllowed } from './redirects'
 
 export const AUTH_BASE_PATH = '/api/auth'
 
-/** The one resource (token audience) this server issues OAuth tokens for: Beitecha's remote MCP endpoint. */
+/**
+ * The resources (token audiences) this server issues OAuth tokens for: each app's remote MCP endpoint.
+ * `MCP_RESOURCE` (Beitecha) is the one the plugin serves protected-resource metadata for; the rest are
+ * extra entries in the plugin's `resources` list. Each resource's `allowedScopes` caps what a token for
+ * that audience can carry, so a registered client never gets one app's write scope on another app's token.
+ */
 export const MCP_RESOURCE = 'https://beitecha.baderech.app/mcp'
-export const MCP_SCOPES = ['openid', 'offline_access', 'beitecha:write']
+export const BISHUL_RESOURCE = 'https://bishul.baderech.app/mcp'
+export const MCP_RESOURCES = [
+  { identifier: MCP_RESOURCE, name: 'Beitecha MCP', allowedScopes: ['openid', 'offline_access', 'beitecha:write'] },
+  { identifier: BISHUL_RESOURCE, name: 'Bishul MCP', allowedScopes: ['openid', 'offline_access', 'bishul:write'] },
+]
+/** Every scope a client may register for; the per-resource `allowedScopes` narrow it at token time. */
+export const MCP_SCOPES = ['openid', 'offline_access', 'beitecha:write', 'bishul:write']
 export const OAUTH_SIGN_IN_PAGE = '/oauth/sign-in'
 export const OAUTH_CONSENT_PAGE = '/oauth/consent'
 
@@ -54,12 +65,18 @@ export async function createAuth(env: Env) {
       expo(),
       bearer(),
       oneTimeToken({ expiresIn: 3 }),
-      // OAuth server for Beitecha's MCP endpoint (the mcp plugin is the OAuth provider; never add oauthProvider()).
+      // OAuth server for the apps' MCP endpoints (Beitecha, Bishul) (the mcp plugin is the OAuth provider; never add oauthProvider()).
       jwt(),
       mcp({
         loginPage: OAUTH_SIGN_IN_PAGE,
         consentPage: OAUTH_CONSENT_PAGE,
         resource: MCP_RESOURCE,
+        // Seeded into the oauthResource table (existing tables; no migration). 'merge' so the scope caps are
+        // applied to rows that already exist in production (Beitecha's was seeded without any).
+        resources: MCP_RESOURCES,
+        resourceSeedMode: 'merge',
+        // Clients registered by chat apps may request any of the resources; each token is capped per resource.
+        clientRegistrationDefaultResources: MCP_RESOURCES.map((r) => r.identifier),
         scopes: MCP_SCOPES,
         clientRegistrationDefaultScopes: MCP_SCOPES,
         // Chat apps (Claude.ai) register themselves. CIMD was ruled out: Workers can't pin a resolved IP.

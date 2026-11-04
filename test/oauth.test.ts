@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { calculateJwkThumbprint, createLocalJWKSet, exportJWK, generateKeyPair, jwtVerify, SignJWT } from 'jose'
 import { requireMcpAuth } from '@better-auth/mcp'
 import { describe, expect, it } from 'vitest'
-import { createAuth, MCP_RESOURCE } from '../src/auth'
+import { BISHUL_RESOURCE, createAuth, MCP_RESOURCE } from '../src/auth'
 import worker from '../src/index'
 import { baseEnv, call, ORIGIN, PASSWORD, signUp, lastMail, verifiedSession } from './helpers'
 
@@ -278,6 +278,79 @@ describe('existing sign-in is untouched', () => {
     const { token: t, user } = await verifiedSession()
     expect((await call('GET', '/api/auth/get-session', undefined, { token: t })).data.user.id).toBe(user.id)
     expect((await call('GET', '/api/data/x', undefined, { token: t })).status).toBe(200)
+  })
+})
+
+describe('multiple MCP resources (Beitecha and Bishul)', () => {
+  const ALL = 'openid offline_access beitecha:write bishul:write'
+  const exchange = (clientId: string, code: string, verifier: string, resource: string) =>
+    token({ grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: REDIRECT, client_id: clientId, resource })
+
+  it('issues a Bishul-audience token with bishul:write, and refreshes it', async () => {
+    const reg = await registerClient({ scope: ALL })
+    expect(reg.status, JSON.stringify(reg.data)).toBe(201)
+    const clientId = reg.data.client_id as string
+    const { code, verifier } = await authorize({ clientId, scope: 'openid offline_access bishul:write', resource: BISHUL_RESOURCE })
+    const t = await exchange(clientId, code, verifier, BISHUL_RESOURCE)
+    expect(t.status, JSON.stringify(t.data)).toBe(200)
+    const { payload } = await jwtVerify(t.data.access_token, await jwks(), { issuer: ISSUER, audience: BISHUL_RESOURCE })
+    expect(payload.aud).toContain(BISHUL_RESOURCE)
+    expect(payload.aud).not.toContain(MCP_RESOURCE)
+    expect(payload.scope).toContain('bishul:write')
+    expect(payload.scope).not.toContain('beitecha:write')
+    // Beitecha's verifier would refuse it.
+    await expect(jwtVerify(t.data.access_token, await jwks(), { issuer: ISSUER, audience: MCP_RESOURCE })).rejects.toThrow()
+
+    const r = await token({ grant_type: 'refresh_token', refresh_token: t.data.refresh_token, client_id: clientId, resource: BISHUL_RESOURCE })
+    expect(r.status, JSON.stringify(r.data)).toBe(200)
+    const refreshed = await jwtVerify(r.data.access_token, await jwks(), { issuer: ISSUER, audience: BISHUL_RESOURCE })
+    expect(refreshed.payload.scope).toContain('bishul:write')
+    expect(refreshed.payload.scope).not.toContain('beitecha:write')
+  })
+
+  it('never gives one app its sibling\'s write scope, even when the client asked for both', async () => {
+    const clientId = (await registerClient({ scope: ALL })).data.client_id as string
+    for (const [resource, want, other] of [
+      [MCP_RESOURCE, 'beitecha:write', 'bishul:write'],
+      [BISHUL_RESOURCE, 'bishul:write', 'beitecha:write'],
+    ]) {
+      const { code, verifier } = await authorize({ clientId, scope: ALL, resource })
+      const t = await exchange(clientId, code, verifier, resource)
+      expect(t.status, JSON.stringify(t.data)).toBe(200)
+      const { payload } = await jwtVerify(t.data.access_token, await jwks(), { issuer: ISSUER, audience: resource })
+      expect(String(payload.scope).split(' ')).toContain(want)
+      expect(String(payload.scope).split(' ')).not.toContain(other)
+    }
+  })
+
+  it('keeps Beitecha unchanged: its audience and scope for a Beitecha-only client', async () => {
+    const clientId = (await registerClient()).data.client_id as string
+    const { code, verifier } = await authorize({ clientId })
+    const t = await exchange(clientId, code, verifier, MCP_RESOURCE)
+    expect(t.status).toBe(200)
+    const { payload } = await jwtVerify(t.data.access_token, await jwks(), { issuer: ISSUER, audience: MCP_RESOURCE })
+    expect(payload.scope).toContain('beitecha:write')
+  })
+
+  it('refuses a Bishul token request that asks only for Beitecha\'s scope', async () => {
+    const clientId = (await registerClient({ scope: ALL })).data.client_id as string
+    const res = await new Browser().fetch(
+      `/api/auth/oauth2/authorize?${new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: REDIRECT, scope: 'beitecha:write', state: 's', code_challenge: 'a'.repeat(43), code_challenge_method: 'S256', resource: BISHUL_RESOURCE })}`,
+    )
+    expect(res.headers.get('location') ?? '').not.toContain('/oauth/sign-in')
+  })
+
+  it('rejects a resource that is not Beitecha or Bishul, at authorize and at the token endpoint', async () => {
+    const clientId = (await registerClient({ scope: ALL })).data.client_id as string
+    for (const resource of ['https://evil.example/mcp', 'https://bishul.baderech.app/other', 'https://bishul.baderech.app']) {
+      const res = await new Browser().fetch(
+        `/api/auth/oauth2/authorize?${new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: REDIRECT, scope: 'openid', state: 's', code_challenge: 'a'.repeat(43), code_challenge_method: 'S256', resource })}`,
+      )
+      expect(res.headers.get('location') ?? '', resource).not.toContain('/oauth/sign-in')
+    }
+    const { code, verifier } = await authorize({ clientId, scope: 'openid offline_access bishul:write', resource: BISHUL_RESOURCE })
+    const swapped = await exchange(clientId, code, verifier, 'https://evil.example/mcp')
+    expect(swapped.status).toBeGreaterThanOrEqual(400)
   })
 })
 
