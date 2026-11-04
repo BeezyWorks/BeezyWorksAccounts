@@ -91,12 +91,17 @@ fail((x.d&&x.d.message)||'We could not sign you in. Check your email and passwor
 
 export function oauthConsentPage(): string {
   const body = `<h1>Allow access?</h1>
-<p><strong id="name">An app</strong> wants to manage your shul's notices in Beitecha.</p>
-<p class="small">It can read your shul's schedule and add or change notices, such as sponsorships, on your behalf. You can revoke it any time in Beitecha. It will return you to <strong id="host">its own site</strong>.</p>
+<p><strong id="name">An app</strong> wants to connect to your BeezyWorks account: <span id="what">your BeezyWorks apps</span>.</p>
+<p class="small" id="detail">It can read and change your data in those apps on your behalf. You can revoke it any time in the app. </p>
+<p class="small">It will return you to <strong id="host">its own site</strong>.</p>
 <p class="small">Only allow this if you just asked this app to connect to a BeezyWorks app.</p>
 <button id="a" type="button">Allow</button><button id="d" type="button" class="alt">Deny</button><p id="m" role="status"></p>`
   const script = `${OAUTH_QUERY_JS}
 var a=document.getElementById('a'),d=document.getElementById('d');
+var APPS={'beitecha:write':['Beitecha','read your shul\'s schedule and add or change notices, such as sponsorships'],'bishul:write':['Bishul','read and change your recipes, menus, household and shopping lists']};
+var sc=(q.get('scope')||'').split(/\s+/).filter(function(x){return APPS[x]});
+if(sc.length){document.getElementById('what').textContent=sc.map(function(x){return APPS[x][0]}).join(' and ');
+document.getElementById('detail').textContent='It can '+sc.map(function(x){return APPS[x][1]}).join(', and ')+', on your behalf. You can revoke it any time in the app.'}
 try{document.getElementById('host').textContent=new URL(q.get('redirect_uri')).host}catch(e){}
 if(!oq()){a.disabled=d.disabled=true;fail('This link is not valid. Please start again from the app.')}
 else fetch('/api/auth/oauth2/public-client?client_id='+encodeURIComponent(q.get('client_id')||''),{credentials:'same-origin'})
