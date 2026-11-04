@@ -14,8 +14,10 @@
 			"migrations_dir": "migrations"
 		}
 	],
+	// Apps told when an account is deleted (see deleteUser.afterDelete in src/auth.ts).
+	"services": [{ "binding": "BISHUL", "service": "bishul" }],
 	// Non-secret config. Secrets (BETTER_AUTH_SECRET, RESEND_API_KEY, GOOGLE_*,
-	// APPLE_TEAM_ID/KEY_ID/PRIVATE_KEY) are set with `wrangler secret put`.
+	// APPLE_TEAM_ID/KEY_ID/PRIVATE_KEY, BISHUL_EVENTS_SECRET) are set with `wrangler secret put`.
 	"vars": {
 		"BETTER_AUTH_URL": "https://auth.baderech.app",
 		"EMAIL_FROM": "Baderech <noreply@baderech.app>",

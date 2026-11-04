@@ -169,6 +169,7 @@ export async function createAuth(env: Env) {
         // The FK cascade should already do this; delete explicitly in case D1 does not enforce it.
         afterDelete: async (user) => {
           await deleteUserData(env, user.id)
+          await notifyBishul(env, user.id)
         },
         beforeDelete: async (user) => {
           if (!apple) return
@@ -219,4 +220,22 @@ export async function createAuth(env: Env) {
     },
   })
   return auth
+}
+
+/** Tells Bishul to erase the user's data. Never blocks the deletion; the endpoint is idempotent, so a failure can be re-sent. */
+async function notifyBishul(env: Env, userId: string) {
+  if (!env.BISHUL || !env.BISHUL_EVENTS_SECRET) return
+  try {
+    const res = await env.BISHUL.fetch('https://bishul.baderech.app/internal/account-deleted', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${env.BISHUL_EVENTS_SECRET}`,
+      },
+      body: JSON.stringify({ userId }),
+    })
+    if (!res.ok) console.error('[bishul] account-deleted notice failed', res.status)
+  } catch (e) {
+    console.error('[bishul] account-deleted notice failed', e instanceof Error ? e.message : e)
+  }
 }
