@@ -19,13 +19,13 @@ export const AUTH_BASE_PATH = '/api/auth'
  * that audience can carry, so a registered client never gets one app's write scope on another app's token.
  */
 export const MCP_RESOURCE = 'https://beitecha.baderech.app/mcp'
-export const BISHUL_RESOURCE = 'https://bishul.baderech.app/mcp'
+export const TAVSHIL_RESOURCE = 'https://tavshil.baderech.app/mcp'
 export const MCP_RESOURCES = [
   { identifier: MCP_RESOURCE, name: 'Beitecha MCP', allowedScopes: ['openid', 'offline_access', 'beitecha:write'] },
-  { identifier: BISHUL_RESOURCE, name: 'Bishul MCP', allowedScopes: ['openid', 'offline_access', 'bishul:write'] },
+  { identifier: TAVSHIL_RESOURCE, name: 'Tavshil MCP', allowedScopes: ['openid', 'offline_access', 'tavshil:write'] },
 ]
 /** Every scope a client may register for; the per-resource `allowedScopes` narrow it at token time. */
-export const MCP_SCOPES = ['openid', 'offline_access', 'beitecha:write', 'bishul:write']
+export const MCP_SCOPES = ['openid', 'offline_access', 'beitecha:write', 'tavshil:write']
 export const OAUTH_SIGN_IN_PAGE = '/oauth/sign-in'
 export const OAUTH_CONSENT_PAGE = '/oauth/consent'
 
@@ -65,7 +65,7 @@ export async function createAuth(env: Env) {
       expo(),
       bearer(),
       oneTimeToken({ expiresIn: 3 }),
-      // OAuth server for the apps' MCP endpoints (Beitecha, Bishul) (the mcp plugin is the OAuth provider; never add oauthProvider()).
+      // OAuth server for the apps' MCP endpoints (Beitecha, Tavshil) (the mcp plugin is the OAuth provider; never add oauthProvider()).
       jwt(),
       mcp({
         loginPage: OAUTH_SIGN_IN_PAGE,
@@ -169,7 +169,7 @@ export async function createAuth(env: Env) {
         // The FK cascade should already do this; delete explicitly in case D1 does not enforce it.
         afterDelete: async (user) => {
           await deleteUserData(env, user.id)
-          await notifyBishul(env, user.id)
+          await notifyTavshil(env, user.id)
         },
         beforeDelete: async (user) => {
           if (!apple) return
@@ -222,20 +222,20 @@ export async function createAuth(env: Env) {
   return auth
 }
 
-/** Tells Bishul to erase the user's data. Never blocks the deletion; the endpoint is idempotent, so a failure can be re-sent. */
-async function notifyBishul(env: Env, userId: string) {
-  if (!env.BISHUL || !env.BISHUL_EVENTS_SECRET) return
+/** Tells Tavshil to erase the user's data. Never blocks the deletion; the endpoint is idempotent, so a failure can be re-sent. */
+async function notifyTavshil(env: Env, userId: string) {
+  if (!env.TAVSHIL || !env.TAVSHIL_EVENTS_SECRET) return
   try {
-    const res = await env.BISHUL.fetch('https://bishul.baderech.app/internal/account-deleted', {
+    const res = await env.TAVSHIL.fetch('https://tavshil.baderech.app/internal/account-deleted', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        authorization: `Bearer ${env.BISHUL_EVENTS_SECRET}`,
+        authorization: `Bearer ${env.TAVSHIL_EVENTS_SECRET}`,
       },
       body: JSON.stringify({ userId }),
     })
-    if (!res.ok) console.error('[bishul] account-deleted notice failed', res.status)
+    if (!res.ok) console.error('[tavshil] account-deleted notice failed', res.status)
   } catch (e) {
-    console.error('[bishul] account-deleted notice failed', e instanceof Error ? e.message : e)
+    console.error('[tavshil] account-deleted notice failed', e instanceof Error ? e.message : e)
   }
 }

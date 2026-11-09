@@ -98,7 +98,7 @@ export function oauthConsentPage(): string {
 <button id="a" type="button">Allow</button><button id="d" type="button" class="alt">Deny</button><p id="m" role="status"></p>`
   const script = `${OAUTH_QUERY_JS}
 var a=document.getElementById('a'),d=document.getElementById('d');
-var APPS={'beitecha:write':['Beitecha','read the shul schedule and add or change notices, such as sponsorships'],'bishul:write':['Bishul','read and change your recipes, menus, household and shopping lists']};
+var APPS={'beitecha:write':['Beitecha','read the shul schedule and add or change notices, such as sponsorships'],'tavshil:write':['Tavshil','read and change your recipes, menus, household and shopping lists']};
 var sc=(q.get('scope')||'').split(/\s+/).filter(function(x){return APPS[x]});
 if(sc.length){document.getElementById('what').textContent=sc.map(function(x){return APPS[x][0]}).join(' and ');
 document.getElementById('detail').textContent='It can '+sc.map(function(x){return APPS[x][1]}).join(', and ')+', on your behalf. You can revoke it any time in the app.'}

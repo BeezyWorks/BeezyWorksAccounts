@@ -11,11 +11,11 @@ export interface Env {
   APPLE_KEY_ID?: string
   /** Contents of the Apple .p8 key (literal "\n" sequences are accepted). */
   APPLE_PRIVATE_KEY?: string
-  /** Shared with Bishul's ACCOUNT_EVENTS_SECRET; authenticates account-deleted notices. */
-  BISHUL_EVENTS_SECRET?: string
+  /** Shared with Tavshil's ACCOUNT_EVENTS_SECRET; authenticates account-deleted notices. */
+  TAVSHIL_EVENTS_SECRET?: string
 
   // Service bindings
-  BISHUL?: Fetcher
+  TAVSHIL?: Fetcher
 
   // Vars
   BETTER_AUTH_URL: string

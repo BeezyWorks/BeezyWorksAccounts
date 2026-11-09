@@ -171,7 +171,7 @@ pnpm deploy                                 # wrangler deploy
 5. Redeploy (`pnpm deploy`).
 
 
-## OAuth server for the apps' MCP endpoints (Beitecha, Bishul)
+## OAuth server for the apps' MCP endpoints (Beitecha, Tavshil)
 
 Better Auth's `@better-auth/mcp` plugin (with `jwt()`) makes this service the OAuth 2.1 authorization server for two
 resources (token audiences), chosen per request by the RFC 8707 `resource` parameter:
@@ -179,7 +179,7 @@ resources (token audiences), chosen per request by the RFC 8707 `resource` param
 | Resource (`aud`) | Write scope |
 | --- | --- |
 | `https://beitecha.baderech.app/mcp` | `beitecha:write` |
-| `https://bishul.baderech.app/mcp` | `bishul:write` |
+| `https://tavshil.baderech.app/mcp` | `tavshil:write` |
 
 Every token may also carry `openid` and `offline_access`. Each resource has an `allowedScopes` cap (`MCP_RESOURCES` in
 `src/auth.ts`), so a token for one app never carries the other app's write scope, whatever the client asked for or

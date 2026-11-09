@@ -15,13 +15,13 @@
 		}
 	],
 	// Apps told when an account is deleted (see deleteUser.afterDelete in src/auth.ts).
-	"services": [{ "binding": "BISHUL", "service": "bishul" }],
+	"services": [{ "binding": "TAVSHIL", "service": "tavshil" }],
 	// Non-secret config. Secrets (BETTER_AUTH_SECRET, RESEND_API_KEY, GOOGLE_*,
-	// APPLE_TEAM_ID/KEY_ID/PRIVATE_KEY, BISHUL_EVENTS_SECRET) are set with `wrangler secret put`.
+	// APPLE_TEAM_ID/KEY_ID/PRIVATE_KEY, TAVSHIL_EVENTS_SECRET) are set with `wrangler secret put`.
 	"vars": {
 		"BETTER_AUTH_URL": "https://auth.baderech.app",
 		"EMAIL_FROM": "Baderech <noreply@baderech.app>",
-		"TRUSTED_ORIGINS": "bishul://,mishnaapp://,https://mishna.baderech.app,siddurone://,https://siddur.baderech.app,https://tefila.baderech.app,https://siddur.one,https://beitecha.baderech.app,https://bishul.baderech.app",
+		"TRUSTED_ORIGINS": "tavshil://,mishnaapp://,https://mishna.baderech.app,siddurone://,https://siddur.baderech.app,https://tefila.baderech.app,https://siddur.one,https://beitecha.baderech.app,https://tavshil.baderech.app",
 		"COOKIE_DOMAIN": "baderech.app",
 		"APPLE_SERVICES_ID": "com.beezyworks.accounts",
 		"APPLE_APP_BUNDLE_IDS": "com.beezyworks.siddurone",
